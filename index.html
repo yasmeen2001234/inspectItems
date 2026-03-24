@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Item Inspect</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cinzel:wght@400;600&display=swap");
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --gold: #c9a84c;
+        --gold-dim: #7a5f28;
+        --border: rgba(180, 140, 60, 0.35);
+        --text: #d4b483;
+        --text-dim: #6e5a3a;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "IM Fell English", serif;
+        color: var(--text);
+      }
+
+      #bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        background: url("Background.jpg") center center / cover no-repeat;
+        filter: blur(14px) brightness(0.45) saturate(0.8);
+        transform: scale(1.05);
+      }
+
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        background: radial-gradient(
+          ellipse at center,
+          transparent 35%,
+          rgba(0, 0, 0, 0.7) 100%
+        );
+        pointer-events: none;
+      }
+
+      #canvas-wrap {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        cursor: grab;
+      }
+      #canvas-wrap:active {
+        cursor: grabbing;
+      }
+      canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      .corner {
+        position: fixed;
+        z-index: 10;
+        width: 36px;
+        height: 36px;
+        border-color: var(--gold-dim);
+        border-style: solid;
+        pointer-events: none;
+        opacity: 0.7;
+      }
+      .corner.tl {
+        top: 12px;
+        left: 12px;
+        border-width: 1px 0 0 1px;
+      }
+      .corner.tr {
+        top: 12px;
+        right: 12px;
+        border-width: 1px 1px 0 0;
+      }
+      .corner.bl {
+        bottom: 12px;
+        left: 12px;
+        border-width: 0 0 1px 1px;
+      }
+      .corner.br {
+        bottom: 12px;
+        right: 12px;
+        border-width: 0 1px 1px 0;
+      }
+
+      #title-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 22px 40px 16px;
+        background: linear-gradient(
+          to bottom,
+          rgba(5, 3, 2, 0.95) 60%,
+          transparent
+        );
+        pointer-events: none;
+      }
+      .bar-line {
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(to right, transparent, var(--gold-dim));
+      }
+      .bar-line.right {
+        background: linear-gradient(to left, transparent, var(--gold-dim));
+      }
+      #item-name {
+        font-family: "Cinzel", serif;
+        font-size: clamp(13px, 2.5vw, 22px);
+        letter-spacing: 0.3em;
+        color: var(--gold);
+        padding: 0 28px;
+        text-transform: uppercase;
+        text-shadow: 0 0 20px rgba(201, 168, 76, 0.4);
+        white-space: nowrap;
+      }
+
+      #bottom-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+        padding: 20px 32px 28px;
+        background: linear-gradient(
+          to top,
+          rgba(5, 3, 2, 0.97) 55%,
+          transparent
+        );
+        pointer-events: none;
+      }
+      #item-desc {
+        font-style: italic;
+        font-size: clamp(12px, 1.8vw, 15px);
+        line-height: 1.7;
+        color: var(--text-dim);
+        max-width: 560px;
+        margin: 0 auto;
+        text-align: center;
+        animation: fadeUp 1s 0.3s ease both;
+      }
+
+      #hint {
+        position: fixed;
+        bottom: 72px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(10, 8, 6, 0.75);
+        border: 1px solid var(--border);
+        border-radius: 40px;
+        padding: 7px 20px;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        color: var(--text-dim);
+        pointer-events: none;
+        transition: opacity 1s ease;
+        white-space: nowrap;
+      }
+      #hint.hidden {
+        opacity: 0;
+      }
+
+      #loader {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: rgba(5, 3, 2, 0.92);
+        transition: opacity 0.5s;
+      }
+      #loader.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .spinner {
+        width: 44px;
+        height: 44px;
+        border: 2px solid var(--border);
+        border-top-color: var(--gold);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+      .loader-text {
+        font-family: "Cinzel", serif;
+        font-size: 11px;
+        letter-spacing: 0.35em;
+        color: var(--gold-dim);
+        text-transform: uppercase;
+      }
+
+      /* mute button — bottom-right corner */
+      #mute-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 15;
+        width: 38px;
+        height: 38px;
+        background: rgba(10, 8, 6, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        color: var(--gold-dim);
+        font-size: 17px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          color 0.2s,
+          border-color 0.2s,
+          opacity 0.2s;
+        user-select: none;
+      }
+      #mute-btn:hover {
+        color: var(--gold);
+        border-color: var(--gold);
+      }
+      #mute-btn.muted {
+        opacity: 0.4;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bg"></div>
+
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <div id="title-bar">
+      <div class="bar-line"></div>
+      <div id="item-name">Letter</div>
+      <div class="bar-line right"></div>
+    </div>
+
+    <div id="canvas-wrap"></div>
+
+    <div id="loader">
+      <div class="spinner"></div>
+      <div class="loader-text">Examining...</div>
+    </div>
+
+    <div id="hint">
+      * &nbsp;Drag to rotate &nbsp;.&nbsp; Scroll to zoom &nbsp;*
+    </div>
+
+    <div id="bottom-panel">
+      <div id="item-desc">
+        An old letter. Examine it carefully - it may hold answers.
+      </div>
+    </div>
+
+    <audio id="bg-music" src="music.mp3" loop preload="auto"></audio>
+    <button id="mute-btn" title="Toggle music">&#9834;</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+
+    <script>
+      (function () {
+        // ── Music ─────────────────────────────────────────────────────────────────
+        const music = document.getElementById("bg-music");
+        const muteBtn = document.getElementById("mute-btn");
+        let musicStarted = false;
+
+        function startMusic() {
+          if (musicStarted) return;
+          musicStarted = true;
+          music.volume = 0.5;
+          music.play().catch(function () {});
+        }
+
+        // Browsers require a user gesture before audio can play
+        document.addEventListener("click", startMusic, { once: true });
+        document.addEventListener("touchstart", startMusic, { once: true });
+
+        muteBtn.addEventListener("click", function (e) {
+          e.stopPropagation(); // don't also trigger startMusic via document click
+          startMusic(); // in case mute btn is the very first interaction
+          music.muted = !music.muted;
+          muteBtn.innerHTML = music.muted ? "&#9835;" : "&#9834;";
+          muteBtn.classList.toggle("muted", music.muted);
+        });
+
+        // ── Renderer ──────────────────────────────────────────────────────────────
+        var wrap = document.getElementById("canvas-wrap");
+        var renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        wrap.appendChild(renderer.domElement);
+
+        // ── Scene / Camera ────────────────────────────────────────────────────────
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(
+          42,
+          wrap.clientWidth / wrap.clientHeight,
+          0.01,
+          100,
+        );
+        camera.position.z = 3;
+
+        // ── Lights ────────────────────────────────────────────────────────────────
+        scene.add(new THREE.AmbientLight(0xfff4e0, 0.45));
+
+        var key = new THREE.DirectionalLight(0xfff8e8, 2.4);
+        key.position.set(2, 3, 3);
+        key.castShadow = true;
+        scene.add(key);
+
+        var fill = new THREE.DirectionalLight(0xc8a060, 0.7);
+        fill.position.set(-2, 1, -1);
+        scene.add(fill);
+
+        var rim = new THREE.DirectionalLight(0xffd080, 1.0);
+        rim.position.set(0, -2, -3);
+        scene.add(rim);
+
+        // ── Pivot ─────────────────────────────────────────────────────────────────
+        var pivot = new THREE.Group();
+        scene.add(pivot);
+
+        // ── Interaction state ─────────────────────────────────────────────────────
+        var dragging = false;
+        var prevX = 0,
+          prevY = 0;
+        var velX = 0,
+          velY = 0;
+        var rotX = 0.2,
+          rotY = 0.4;
+        var targetZ = 3;
+        var hintTimer;
+
+        function onStart(x, y) {
+          dragging = true;
+          prevX = x;
+          prevY = y;
+          velX = 0;
+          velY = 0;
+        }
+        function onMove(x, y) {
+          if (!dragging) return;
+          var dx = x - prevX,
+            dy = y - prevY;
+          rotY += dx * 0.008;
+          rotX += dy * 0.008;
+          velX = dx * 0.008;
+          velY = dy * 0.008;
+          prevX = x;
+          prevY = y;
+        }
+        function onEnd() {
+          dragging = false;
+        }
+
+        wrap.addEventListener("mousedown", function (e) {
+          onStart(e.clientX, e.clientY);
+        });
+        wrap.addEventListener("mousemove", function (e) {
+          onMove(e.clientX, e.clientY);
+        });
+        wrap.addEventListener("mouseup", onEnd);
+        wrap.addEventListener("mouseleave", onEnd);
+
+        wrap.addEventListener(
+          "touchstart",
+          function (e) {
+            var t = e.touches[0];
+            onStart(t.clientX, t.clientY);
+          },
+          { passive: true },
+        );
+        wrap.addEventListener(
+          "touchmove",
+          function (e) {
+            e.preventDefault();
+            var t = e.touches[0];
+            onMove(t.clientX, t.clientY);
+          },
+          { passive: false },
+        );
+        wrap.addEventListener("touchend", onEnd);
+
+        wrap.addEventListener(
+          "wheel",
+          function (e) {
+            targetZ = Math.max(0.5, Math.min(8, targetZ + e.deltaY * 0.005));
+          },
+          { passive: true },
+        );
+
+        window.addEventListener("resize", function () {
+          renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+          camera.aspect = wrap.clientWidth / wrap.clientHeight;
+          camera.updateProjectionMatrix();
+        });
+
+        // ── Render loop ───────────────────────────────────────────────────────────
+        function animate() {
+          requestAnimationFrame(animate);
+
+          if (!dragging) {
+            velX *= 0.92;
+            velY *= 0.92;
+            rotX += velY;
+            rotY += velX;
+          }
+
+          rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotX));
+          pivot.rotation.x = rotX;
+          pivot.rotation.y = rotY;
+          camera.position.z += (targetZ - camera.position.z) * 0.08;
+
+          renderer.render(scene, camera);
+        }
+        animate();
+
+        // ── Load letter.glb ───────────────────────────────────────────────────────
+        var gltfLoader = new THREE.GLTFLoader();
+
+        try {
+          var draco = new THREE.DRACOLoader();
+          draco.setDecoderPath(
+            "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/",
+          );
+          gltfLoader.setDRACOLoader(draco);
+        } catch (e) {}
+
+        gltfLoader.load(
+          "letter.glb",
+          function (gltf) {
+            var model = gltf.scene;
+
+            var box = new THREE.Box3().setFromObject(model);
+            var centre = box.getCenter(new THREE.Vector3());
+            var size = box.getSize(new THREE.Vector3());
+            var maxDim = Math.max(size.x, size.y, size.z);
+            var scale = 1.8 / maxDim;
+
+            model.scale.setScalar(scale);
+            model.position.copy(centre.multiplyScalar(-scale));
+
+            model.traverse(function (child) {
+              if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            pivot.add(model);
+
+            document.getElementById("loader").classList.add("done");
+
+            var hint = document.getElementById("hint");
+            hint.classList.remove("hidden");
+            hintTimer = setTimeout(function () {
+              hint.classList.add("hidden");
+            }, 3800);
+          },
+          undefined,
+          function (err) {
+            console.error("GLB load error:", err);
+            document.querySelector(".loader-text").textContent =
+              "Failed to load model";
+          },
+        );
+      })();
+    </script>
+  </body>
+</html>
